@@ -1,0 +1,95 @@
+@startuml
+
+participant Frontend
+participant Backend
+participant Postgres
+participant Redis
+
+== Get current user ==
+Frontend -> Backend: HTTP: GET: /api/users/me (auth_token)
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend --> Frontend: HTTP: user
+
+== Sign out ==
+Frontend -> Backend: HTTP: POST: /api/auth/sign-out (auth_token)
+Backend -> Postgres: PSQL: get token_instance by auth token
+alt token not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: token_instance
+Backend -> Postgres: PSQL: delete token_instance
+Postgres --> Backend: PSQL: OK
+Backend --> Frontend: HTTP: 204
+
+== Sign in ==
+Frontend -> Backend: HTTP: POST: /api/auth/sign-in (email + password)
+Backend -> Postgres: PSQL: get user by email
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Backend: Python: compare password with user.password
+alt passwords are not simillar
+Backend --x Frontend: HTTP: 400
+end alt
+Backend -> Postgres: PSQL: create token
+Postgres --> Backend: PSQL: token
+Backend --> Frontend: HTTP: token
+
+== google auth ==
+Frontend -> Backend: HTTP: POST: /api/auth/sign-in/gmail
+
+== get requests to feedback ==
+Frontend -> Backend: HTTP: GET: /api/reviews/me (auth_token)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get assessments where reviwee  is user.id
+Postgres --> Backend: PSQL: assessments
+loop for assessment in assessments
+Backend -> Postgres: PSQL: get answers by assessment.id
+Postgres --> Backend: PSQL: answers
+end loop
+Backend --> Frontend: HTTP: answers
+
+== Get requests to review ==
+Frontend -> Backend: HTTP: GET: /api/reviews (auth_token)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get assessments by user.id
+Postgres --> Backend: PSQL: assessments
+Backend --> Frontend: HTTP: assessments
+
+== Get assessment by id ==
+Frontend -> Backend: HTTP: GET: /api/reviews/{assessment_id} (auth_token)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get assessment by assessment_id and user.id
+alt not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 403
+end alt
+Postgres --> Backend: PSQL: assessment
+Backend --> Frontend: HTTP: assessment
+
+== Get shared reviews ==
+Fronted -> Backend: HTTP: GET: /api/reviews/shared (auth_token)
+@enduml

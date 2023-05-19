@@ -44,6 +44,7 @@ entity Assessment{
 *pk
 __
 *user_id: number <<FK>>
+*reviewee: number <<FK>>
 *status: SurveyStatusEnum <<default: PENDING>>
 }
 
@@ -52,7 +53,7 @@ entity Answer{
 __
 *assessment_id: number <<FK>>
 *question_id: number <<FK>>
-*answer: text
+answer: text
 }
 
 entity SharedReview{
@@ -65,6 +66,7 @@ __
 Question }|--|| Survey
 Answer }|--|| Assessment
 Question ||--|| Answer
+Assessment }|--|| User
 Assessment }|--|| User
 
 SharedReview }|--|| User
