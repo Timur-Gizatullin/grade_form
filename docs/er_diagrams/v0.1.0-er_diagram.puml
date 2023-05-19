@@ -1,0 +1,72 @@
+@startuml
+
+entity UserRoleEnum{
+ADMIN: "ADMIN"
+LEAD: "LEAD"
+MENTOR: "MENTOR"
+EMPLOYER: "EMPLOYER"
+}
+
+entity SurveyStatusEnum{
+COMPLETED: "COMPLETED"
+PENDING: "PENDING"
+IN_PROGRESS: "IN_PROGRESS"
+}
+
+entity User{
+*pk
+__
+*first_name: text
+*last_name: text
+*username: text
+*email: text
+*password: text
+*role: UserRoleEnum <<default: EMPLOYER>>
+*is_active: bool
+profile_picture: file
+}
+
+entity Survey{
+*pk
+__
+*name: text
+}
+
+entity Question{
+*pk
+__
+*survey_id: number <<FK>
+*body: text
+description: text
+}
+
+entity Assessment{
+*pk
+__
+*user_id: number <<FK>>
+*status: SurveyStatusEnum <<default: PENDING>>
+}
+
+entity Answer{
+*pk
+__
+*assessment_id: number <<FK>>
+*question_id: number <<FK>>
+*answer: text
+}
+
+entity SharedReview{
+*pk
+__
+*user_id: number <<FK>>
+*assessment_id: number <<FK>>
+}
+
+Question }|--|| Survey
+Answer }|--|| Assessment
+Question ||--|| Answer
+Assessment }|--|| User
+
+SharedReview }|--|| User
+SharedReview }|--|| Assessment
+@enduml
