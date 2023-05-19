@@ -91,5 +91,19 @@ Postgres --> Backend: PSQL: assessment
 Backend --> Frontend: HTTP: assessment
 
 == Get shared reviews ==
-Fronted -> Backend: HTTP: GET: /api/reviews/shared (auth_token)
+Frontend -> Backend: HTTP: GET: /api/reviews/shared (auth_token)
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get shared_reviews by user.id
+Postgres --> Backend: PSQL: shared_reviews
+loop for shared_review in shared_reviews
+Backend --> Postgres: PSQL: Get assessment by shared_review.assessment_id
+Backend -> Backend: Python: assessments += assessment
+end loop
+
+Backend --> Frontend: HTTP: assessments
 @enduml

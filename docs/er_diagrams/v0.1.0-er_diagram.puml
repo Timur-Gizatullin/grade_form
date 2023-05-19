@@ -43,7 +43,7 @@ description: text
 entity Assessment{
 *pk
 __
-*user_id: number <<FK>>
+*reviewer: number <<FK>>
 *reviewee: number <<FK>>
 *status: SurveyStatusEnum <<default: PENDING>>
 }
@@ -59,7 +59,7 @@ answer: text
 entity SharedReview{
 *pk
 __
-*user_id: number <<FK>>
+*shared_to: number <<FK>>
 *assessment_id: number <<FK>>
 }
 
