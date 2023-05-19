@@ -106,4 +106,35 @@ Backend -> Backend: Python: assessments += assessment
 end loop
 
 Backend --> Frontend: HTTP: assessments
+
+== Get users to feedback ==
+Frontend -> Backend: HTTP: GET /api/users/feedback (auth_token)
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get users
+Postgres --> Backend: PSQL: users
+Backend --> Frontend: HTTP: users
+
+== Create feedback request ==
+Frontend -> Backend: HTTP: POST: /api/reviews/ (auth_token + reviewer_ids + shared_to_ids + survey_id)
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+loop for reviewer_id in reviewer_ids
+Backend -> Postgres: PSQL: create new assessment (reviewer=reviewer_id, reviewee=user.id)
+Postgres -> Backend: PSQL: assessment
+Backend -> Backend: Python: assessments += assessment
+end loop
+loop for shared_to_id in shared_to_ids
+loop for assessment in assessments
+Backend -> Postgres: PSQL: create new ShredReview (shared_to=shared_to_id, assessment=assessment)
+end loop
+end loop
 @enduml
