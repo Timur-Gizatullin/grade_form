@@ -5,7 +5,7 @@ participant Backend
 participant Postgres
 participant Redis
 
-== Get current user ==
+== текущий пользовать ==
 Frontend -> Backend: HTTP: GET: /api/users/me (auth_token)
 Backend -> Postgres: PSQL: get user by auth token
 alt user not found
@@ -15,7 +15,7 @@ end alt
 Postgres --> Backend: PSQL: user
 Backend --> Frontend: HTTP: user
 
-== Sign out ==
+== выход ==
 Frontend -> Backend: HTTP: POST: /api/auth/sign-out (auth_token)
 Backend -> Postgres: PSQL: get token_instance by auth token
 alt token not found
@@ -27,7 +27,7 @@ Backend -> Postgres: PSQL: delete token_instance
 Postgres --> Backend: PSQL: OK
 Backend --> Frontend: HTTP: 204
 
-== Sign in ==
+== авторизоваться с помощью email/password ==
 Frontend -> Backend: HTTP: POST: /api/auth/sign-in (email + password)
 Backend -> Postgres: PSQL: get user by email
 alt user not found
@@ -43,10 +43,10 @@ Backend -> Postgres: PSQL: create token
 Postgres --> Backend: PSQL: token
 Backend --> Frontend: HTTP: token
 
-== google auth ==
+== авторизоваться через gmail ==
 Frontend -> Backend: HTTP: POST: /api/auth/sign-in/gmail
 
-== get requests to feedback ==
+== список моих фидбэков (вопросы - ответы) ==
 Frontend -> Backend: HTTP: GET: /api/reviews/me (auth_token)
 Backend -> Postgres: PSQL: get user by auth_token
 alt user not found
@@ -62,7 +62,7 @@ Postgres --> Backend: PSQL: answers
 end loop
 Backend --> Frontend: HTTP: answers
 
-== Get requests to review ==
+== список запросов фидбэка, которые прислали мне ==
 Frontend -> Backend: HTTP: GET: /api/reviews (auth_token)
 Backend -> Postgres: PSQL: get user by auth_token
 alt user not found
@@ -74,40 +74,7 @@ Backend -> Postgres: PSQL: get assessments by user.id
 Postgres --> Backend: PSQL: assessments
 Backend --> Frontend: HTTP: assessments
 
-== Get assessment by id ==
-Frontend -> Backend: HTTP: GET: /api/reviews/{assessment_id} (auth_token)
-Backend -> Postgres: PSQL: get user by auth_token
-alt user not found
-Postgres --x Backend: PSQL: not found
-Backend --x Frontend: HTTP: 404
-end alt
-Postgres --> Backend: PSQL: user
-Backend -> Postgres: PSQL: get assessment by assessment_id and user.id
-alt not found
-Postgres --x Backend: PSQL: not found
-Backend --x Frontend: HTTP: 403
-end alt
-Postgres --> Backend: PSQL: assessment
-Backend --> Frontend: HTTP: assessment
-
-== Get shared reviews ==
-Frontend -> Backend: HTTP: GET: /api/reviews/shared (auth_token)
-Backend -> Postgres: PSQL: get user by auth token
-alt user not found
-Postgres --x Backend: PSQL: not found
-Backend --x Frontend: HTTP: 404
-end alt
-Postgres --> Backend: PSQL: user
-Backend -> Postgres: PSQL: get shared_reviews by user.id
-Postgres --> Backend: PSQL: shared_reviews
-loop for shared_review in shared_reviews
-Backend --> Postgres: PSQL: Get assessment by shared_review.assessment_id
-Backend -> Backend: Python: assessments += assessment
-end loop
-
-Backend --> Frontend: HTTP: assessments
-
-== Get users to feedback ==
+== список пользователей, которым я могу отправить запрос на фидбэк ==
 Frontend -> Backend: HTTP: GET /api/users/feedback (auth_token)
 Backend -> Postgres: PSQL: get user by auth token
 alt user not found
@@ -115,11 +82,11 @@ Postgres --x Backend: PSQL: not found
 Backend --x Frontend: HTTP: 404
 end alt
 Postgres --> Backend: PSQL: user
-Backend -> Postgres: PSQL: get users
+Backend -> Postgres: PSQL: get users excluding user.id
 Postgres --> Backend: PSQL: users
 Backend --> Frontend: HTTP: users
 
-== Create feedback request ==
+== создать запрос фидбэка ==
 Frontend -> Backend: HTTP: POST: /api/reviews/ (auth_token + reviewer_ids + shared_to_ids + survey_id)
 Backend -> Postgres: PSQL: get user by auth token
 alt user not found
@@ -135,6 +102,220 @@ end loop
 loop for shared_to_id in shared_to_ids
 loop for assessment in assessments
 Backend -> Postgres: PSQL: create new ShredReview (shared_to=shared_to_id, assessment=assessment)
+Postgres --> Backend: PSQL: OK
 end loop
 end loop
+Backend -> Postgres: PSQL: get questions by survey_id
+Postgres --> Backend: PSQL: questions
+loop for question in questions
+Backend -> Postgres: PSQL: create answer(assessment=assessment, question=question)
+Postgres --> Backend: PSQL: OK
+end loop
+Backend --> Frontend: HTTP: 201
+
+== список вопросов по запросу фидбэка ==
+Frontend -> Backend: HTTP: POST: /api/assessments/{id} (auth_token)
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get assessment by id
+alt assessment not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: assessment
+loop
+Backend -> Postgres: PSQL: Get question by assessment.answer.question_id
+Backend -> Backend: Python: questions += question
+end loop
+Backend --> Frontend: HTTP: questions
+
+== сохранить фидбэк ==
+Frontend -> Backend: HTTP: POST: /api/assessment/{id}/save (auth_token + new_answers(answer_id + answer))
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get assessment by id
+Postgres -> Backend: PSQL: assessment
+Backend -> Backend: Python: compare assessment.reviewer and user.id
+alt assessment.reviewer and user.id are not similar
+Backend --x Frontend: HTTP: 403
+end alt
+loop for new_answer in new_answers
+Backend -> Postgres: PSQL: get answer by new_answer.id
+Postgres --> Backend: PSQL: answer
+Backend --> Backend: Python: answer.answer = answer
+Backend -> Postgres: PSQL: update answer
+Postgres --> Backend: PSQL: OK
+end loop
+Backend -> Backend: Python: assessment.status = SurveyStatusEnum.IN_PROGRES
+Backend --> Frontend: HTTP: 200
+
+== отправить фидбэк ==
+Frontend -> Backend: HTTP: POST: /api/assessment/{id}/save (auth_token + new_answers(answer_id + answer))
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+Backend -> Postgres: PSQL: get assessment by id
+Postgres -> Backend: PSQL: assessment
+Backend -> Backend: Python: compare assessment.reviewer and user.id
+alt assessment.reviewer and user.id are not similar
+Backend --x Frontend: HTTP: 403
+end alt
+loop for new_answer in new_answers
+Backend -> Postgres: PSQL: get answer by new_answer.id
+Postgres --> Backend: PSQL: answer
+Backend --> Backend: Python: answer.answer = answer
+Backend -> Postgres: PSQL: update answer
+Postgres --> Backend: PSQL: OK
+end loop
+Backend -> Backend: Python: assessment.status = SurveyStatusEnum.COMPLETED
+Backend --> Frontend: HTTP: 200
+
+== список запросов фидбэка пользователей в зависимости от роли ==
+Frontend -> Backend: HTTP: GET: /api/reviews/shared (auth_token)
+Backend -> Postgres: PSQL: get user by auth token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role == UserRoleEnum.EMPLOYER or user.ROLE == UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: get shared_reviews by user.id
+Postgres --> Backend: PSQL: shared_reviews
+loop for shared_review in shared_reviews
+Backend --> Postgres: PSQL: Get assessment by shared_review.assessment_id
+Backend -> Backend: Python: assessments += assessment
+end loop
+
+Backend --> Frontend: HTTP: assessments
+
+== список фидбэков с ответами по каждому ответившему пользователю ==
+Frontend -> Backend: HTTP: GET: /api/reviews/users/{id} (auth_token)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role == UserRoleEnum.EMPLOYER or user.ROLE == UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: get assessments by id (assessment.reviewee = id)
+Postgres --> Backend: PSQL: assessments
+Backend --> Frontend: HTTP: assessments
+
+== создать шаблон ==
+Frontend -> Backend: HTTP: POST: /api/survey/template (auth_token + template_name + questions(body, description))
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role == UserRoleEnum.EMPLOYER or user.ROLE == UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: create survey
+Postgres --> Backend: PSQL: survey
+Backend --> Frontend: HTTP: survey
+
+== получить шаблон ==
+Frontend -> Backend: HTTP: GET: /api/survey/{id} (auth_token)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role == UserRoleEnum.EMPLOYER or user.ROLE == UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: get survey by id
+Postgres --> Backend: PSQL: survey
+Backend --> Frontend: HTTP: survey
+
+== cохранить шаблон ==
+Frontend --> Backend: HTTP: PUT: /api/survey/{id} (auth_token + survey_name + questions)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role == UserRoleEnum.EMPLOYER or user.ROLE == UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: get survey by id
+Postgres --> Backend: PSQL: survey
+Backend -> Postgres: PSQL: update survey data
+Postgres --> Backend: PSQL: survey
+Backend --> Frontend: HTTP: survey
+
+
+== получить всех пользователей ==
+Frontend --> Backend: HTTP: GET: /api/users/all (auth_token)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role != UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: get all users
+Postgres --> Backend: PSQL: users
+Backend --> Frontend: HTTP: users
+
+== пользователь для редактирования ==
+Frontend -> Backend: HTTP: GET: /api/users/{id} (auth_token)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role != UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: get user_to_update by id
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user_to_update
+Backend --> Frontend: HTTP: user_to_update
+
+
+== сохранить пользователя ==
+Frontend -> Backend: HTTP: PUT: /api/users/{id}/update (auth_token + user_data)
+Backend -> Postgres: PSQL: get user by auth_token
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Postgres --> Backend: PSQL: user
+alt user.Role != UserRoleEnum.ADMIN
+Backend --x Frontend: HTTP: 403
+end alt
+Backend -> Postgres: PSQL: get user_to_update by id
+alt user not found
+Postgres --x Backend: PSQL: not found
+Backend --x Frontend: HTTP: 404
+end alt
+Backend -> Postgres: PSQL: update user data
+Postgres --> Backend: PSQL: updated_user
+Backend --> Frontend: HTTP: updated_user
 @enduml
